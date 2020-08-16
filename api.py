@@ -1,4 +1,4 @@
-from flask import Flask, request, abort, redirect
+from flask import Flask, request, abort, redirect, render_template
 import sqlite3 as sql
 from setup import User
 
@@ -11,12 +11,21 @@ db_cursor = db_connection.cursor()
 if not sql.connect("databas.db"):
   os.system("createdb.py")
 
-@app.route('/')
+
+@app.route('/us', methods=["GET"])
 def a():
-  return ''
+  return render_template("user_info.html")
+
+
+@app.route('/us', methods=["POST"])
+def a2():
+  user = User(request.form["username"], request.form["passwd"])
+  print("Name: " + user.user + "\nPasswd: "+ user.passwd)
+  return "Name: " + user.user + "\n HPasswd: " + user.passwd 
 
 @app.route('/user', methods = ["POST"])
 def create_user():
+#implement first searching for username to see if already registered
   with sql.connect("database.db") as con:
     cur = con.cursor()
     print('HELLOOO')
