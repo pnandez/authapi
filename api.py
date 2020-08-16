@@ -6,36 +6,47 @@ db_name = "users"
 db_fields = ["email", "password_hash", "admin"]
 app = Flask(__name__)
 
+msg = ''
+
 db_connection = sql.connect("database.db")
 db_cursor = db_connection.cursor()
 if not sql.connect("databas.db"):
   os.system("createdb.py")
 
 
-@app.route('/us', methods=["GET"])
-def a():
-  return render_template("user_info.html")
+@app.route('/userinfo', methods=["GET"])
+def user_display_admin():
+  return render_template("user_info.html", msg = msg)
 
 
-@app.route('/us', methods=["POST"])
-def a2():
+@app.route('/userinfo', methods=["POST"])
+def user_form():
+  global msg
   user = User(request.form["username"], request.form["passwd"])
-  print("Name: " + user.user + "\nPasswd: "+ user.passwd)
-  return "Name: " + user.user + "\n HPasswd: " + user.passwd 
+  if request.form["admin"]:
+    user.admin = "YES"
+  with sql.connect("database.db") as con:
+    cur = con.cursor()
+    if cur.execute("SELECT * FROM users WHERE email =?", (user.user,)):
+      msg = "Usuario existente."
+      return redirect("userinfo")
+    cur.execute("INSERT INTO %s (%s, %s, %s) VALUES ('%s', '%s', '%s')" % (db_name, db_fields[0], db_fields[1], db_fields[2], user.user, user.passwd, user.admin))
+    con.commit()
+    msg = "Usuario creado correctamente."
+  return redirect("/userinfo")
+
 
 @app.route('/user', methods = ["POST"])
 def create_user():
 #implement first searching for username to see if already registered
   with sql.connect("database.db") as con:
     cur = con.cursor()
-    print('HELLOOO')
     data = request.get_json()
     user = data['user']
     password = data['password']
-    admin = "NO"
 
     if user is not None and password is not None:
-      user1 = User(user, password, admin)
+      user1 = User(user, password)
       cur.execute("INSERT INTO %s (%s, %s, %s) VALUES ('%s', '%s', '%s')" %(db_name, db_fields[0], db_fields[1], db_fields[2], user1.user, user1.passwd_hash, user1.admin))
       con.commit()
 
