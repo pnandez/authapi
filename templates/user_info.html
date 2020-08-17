@@ -8,26 +8,21 @@
 
     <h1> Información de usuarios</h1>
     <div id="newuser">
-
-        <h2>Registrar nuevo usuario</h2>
-        <form action="#" method="post">
-            <label for="username"> Nombre de usuario: </label> <br>
-            <input type="text" id="username" name="username"><br>
-
-            <label for="passwd"> Contraseña </label> <br>
-            <input type="text" id="passwd" name="passwd"><br>
-
-            <br>
-            <input type="checkbox" id="admin" name="admin" />
-            <label for="admin"> Admin</label> <br>
-            <br>
-            <button>Registrar</button>
-
-        </form>
-        <p>
-            {{ msg }}
-        </p>
+        <p><a href="{{ url_for('user_form') }}">Nuevo usuario</a></p>
     </div>
     <div>
+        <table style="width:50%">
+            <tr>
+                <th><b>Nombre de usuario</b></th>
+                <th><b>Administrador</b></th>
+            </tr>
+            {% for user in users %}
+            <tr>
+                <th>{{user.username}}</th>
+                <th>{{user.admin}}</th>
+            </tr>
+            {% endfor %}
+        </table>
+
     </div>
 </body>

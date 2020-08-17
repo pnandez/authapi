@@ -1,4 +1,5 @@
 from passlib.apps import custom_app_context as pwd_context
+from flask_jwt_extended import create_access_token
 
 class User:
   def __init__(self, user, password, admin="NO"):
@@ -12,3 +13,6 @@ class User:
 
   def verify_passwd(self, password):
     return pwd_context.verify(password, self.passwd)
+
+  
+
