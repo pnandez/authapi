@@ -1,7 +1,15 @@
 from passlib.apps import custom_app_context as pwd_context
+from passlib.context import CryptContext
 from flask_jwt_extended import create_access_token
 import sqlite3 as sql
 
+
+
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    default="pbkdf2_sha256",
+    pbkdf2_sha256__default_rounds=30000
+)
 
 class User:
   def __init__(self, user, password, admin="NO"):
@@ -16,7 +24,6 @@ class User:
   def verify_passwd(self, password):
     return pwd_context.verify(password, self.passwd)
 
-
 class DB:
   def __init__(self, database):
     self.database = database
@@ -29,7 +36,7 @@ class DB:
       return cur.fetchall()
 
 
-  def search(self, table,  column, data):
+  def get_one(self, table,  column, data):
     with sql.connect(self.database) as con:
       cur = con.cursor()
       cur.execute("SELECT * from %s WHERE %s LIKE '%s'" % (table, column, data))

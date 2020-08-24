@@ -1,16 +1,22 @@
 from flask import Flask, request, abort, redirect, render_template, jsonify, make_response
 import sqlite3 as sql
-from setup import User, DB
-from flask_jwt_extended import JWTManager
+import jwt
+import datetime
+from flask_bcrypt import Bcrypt
+
+
 
 app = Flask(__name__)
-app.config.from_envvar('ENV_FILE_LOCATION')
+app.config["SECRET_KEY"] = "Escultism0"
+
+bcrypt = Bcrypt(app)
+
 
 db_table = "users"
 db_fields = ["email", "password_hash", "admin"]
 database = "database.db"
-jwt = JWTManager(app)
 
+from setup import User, DB
 db = DB(database)
 if not sql.connect(database):
   os.system("createdb.py")
@@ -22,7 +28,7 @@ def user_display_admin():
   records = db.get_all("users")
   users = []
   for record in records:
-    users.append(dict(username=record[0], admin=record[-1]))
+    users.append(dict(username=record[0], passwd=record[1], admin=record[-1]))
   return render_template("user_info.html", users=users)
 
   #WORKS
@@ -35,7 +41,6 @@ def user_display_admin():
 @app.route('/useradd', methods=["GET", "POST"])
 def user_form():
   if request.method == "POST":
-    global msg
     user = User(request.form["username"], request.form["passwd"])
     if request.form.getlist("admin"):
       user.admin = "YES"
@@ -48,13 +53,28 @@ def user_form():
         return jsonify({"Message" : "User not created"})
   else:
     return render_template("new_user.html")
+#WORKS
 
+
+@app.route('/delete_users', methods=["GET", "POST"])
+def delusers():
+  if request.method == "POST":
+    users_to_delete = request.form.getlist("delete_users")
+    for user in users_to_delete:
+      db.delete(db_table, db_fields[0], user)
+    return redirect('/userinfo')
+  else:
+    records = db.get_all("users")
+    users = []
+    for record in records:
+      users.append(dict(username=record[0], passwd=record[1], admin=record[-1]))
+    return render_template("delete_users.html", users=users)
 
 
 #Get information of a certain user
 @app.route('/user/<username>', methods=["GET"])
 def get_users(username):
-  records = db.search( table="users", column="email", data=username)
+  records = db.get_one( table="users", column="email", data=username)
   if records:
     user = User(records[0][0], records[0][1], records[0][2])
     return user.user + "\t " + user.passwd + "\t" + user.admin
@@ -73,23 +93,24 @@ def del_users(username):
   return redirect("/user")
 
 
-@app.route("/login")
+@app.route("/login", methods=["POST"])
 def login():
   data = request.get_json()
   username = data['user']
   password_given = data['password']
-  with sql.connect("database.db") as con:
-    cur = con.cursor()
-    cur.execute("SELECT * from users WHERE email like '%s'" % username)
-    records = cur.fetchall()
-    if records: #If the user exists
-      user = User(records[0][0], records[0][1], records[0][2])
-      if user.verify_passwd(password=password_given):
-        user.get_token()
-        return 
+  records = db.get_one(db_table, db_fields[0], username)
+  if records: #If the user exists
+    user = User(records[0][0], records[0][1], records[0][2])
+    user.passwd = records[0][1]
+    print (user.passwd)
+    if user.verify_passwd(password=password_given): #If passwd correct
+      print("B")
+      token = jwt.encode({'email' : user.user, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30), 'admin' : user.admin}, app.config['SECRET_KEY'])
+      return jsonify({'token' : token.decode('UTF-8')})
     else:
-      #TODO implement error handling if user doesn´t exist
-      return ''
+      return jsonify({'message': 'passwd not valid'})
+  else:
+    return jsonify({'message' : 'user not valid'})
 
 
 if __name__ == '__main__':

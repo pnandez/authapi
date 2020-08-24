@@ -19,10 +19,16 @@
             {% for user in users %}
             <tr>
                 <th>{{user.username}}</th>
+                <th>{{user.passwd}}</th>
                 <th>{{user.admin}}</th>
             </tr>
             {% endfor %}
         </table>
 
+    </div>
+    <div id="deluser">
+        <p>
+            <a href="{{url_for('delusers') }}"> Eliminar usuarios</a>
+        </p>
     </div>
 </body>
