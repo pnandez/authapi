@@ -3,7 +3,7 @@ import sqlite3 as sql
 import jwt
 import datetime
 from flask_bcrypt import Bcrypt
-
+from functools import wraps
 
 
 app = Flask(__name__)
@@ -16,15 +16,44 @@ db_table = "users"
 db_fields = ["email", "password_hash", "admin"]
 database = "database.db"
 
+token_fields = ["email"]
+
 from setup import User, DB
 db = DB(database)
 if not sql.connect(database):
   os.system("createdb.py")
 
 
+def token_required(f):
+  @wraps(f)
+  def decorated(*args, **kwargs):
+    token = None
+
+    if 'access_token' in request.headers:
+      token = request.headers['access_token']
+    
+    if not token:
+      return make_response("No token provided", 400)
+
+    try:
+      data = jwt.decode(token, app.config["SECRET_KEY"])
+      user = db.get_one(db_table, db_fields[0], data[token_fields[0]])
+      print (user[0][0])
+      current_user = User(user[0][0], password='', admin=user[0][2])
+      print ("A\n")
+      current_user.passwd = user[0][1]
+    except:
+      return make_response("Invalid token", 401)
+    return f(current_user, *args, **kwargs)
+  return decorated
+
+
 #Page to display a table with al the users and if they are admin or not
 @app.route('/userinfo', methods=["GET"])
-def user_display_admin():
+@token_required
+def user_display_admin(current_user):
+  if current_user.admin == "NO":
+    return make_response("Only available for admin users", 401)
   records = db.get_all("users")
   users = []
   for record in records:
@@ -96,6 +125,8 @@ def del_users(username):
 @app.route("/login", methods=["POST"])
 def login():
   data = request.get_json()
+  if not data:
+    return make_response("Please provide user and password", 400)
   username = data['user']
   password_given = data['password']
   records = db.get_one(db_table, db_fields[0], username)
@@ -105,12 +136,12 @@ def login():
     print (user.passwd)
     if user.verify_passwd(password=password_given): #If passwd correct
       print("B")
-      token = jwt.encode({'email' : user.user, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30), 'admin' : user.admin}, app.config['SECRET_KEY'])
+      token = jwt.encode({token_fields[0] : user.user, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, app.config['SECRET_KEY'])
       return jsonify({'token' : token.decode('UTF-8')})
     else:
-      return jsonify({'message': 'passwd not valid'})
+      return make_response("Incorrect password", 401)
   else:
-    return jsonify({'message' : 'user not valid'})
+    return make_response("User not found", 401)
 
 
 if __name__ == '__main__':
