@@ -2,14 +2,12 @@ from flask import Flask, request, abort, redirect, render_template, jsonify, mak
 import sqlite3 as sql
 import jwt
 import datetime
-from flask_bcrypt import Bcrypt
+import json
 from functools import wraps
 
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "Escultism0"
-
-bcrypt = Bcrypt(app)
 
 
 db_table = "users"
@@ -33,17 +31,21 @@ def token_required(f):
       token = request.headers['access_token']
     
     if not token:
-      return make_response("No token provided", 400)
+      return jsonify({
+        "http_status": 400,
+        "info": "Token not provided",
+        })
 
     try:
       data = jwt.decode(token, app.config["SECRET_KEY"])
       user = db.get_one(db_table, db_fields[0], data[token_fields[0]])
-      print (user[0][0])
       current_user = User(user[0][0], password='', admin=user[0][2])
-      print ("A\n")
       current_user.passwd = user[0][1]
     except:
-      return make_response("Invalid token", 401)
+      return jsonify({
+          "http_status": 401,
+          "info": "Invalid token",
+      })
     return f(current_user, *args, **kwargs)
   return decorated
 
@@ -52,13 +54,19 @@ def token_required(f):
 @app.route('/userinfo', methods=["GET"])
 @token_required
 def user_display_admin(current_user):
-  if current_user.admin == "NO":
-    return make_response("Only available for admin users", 401)
+  """ if current_user.admin == "NO":
+    return jsonify({
+        "http_status": 401,
+        "info": "Usuario no autorizado",
+    }) """
   records = db.get_all("users")
   users = []
   for record in records:
     users.append(dict(username=record[0], passwd=record[1], admin=record[-1]))
-  return render_template("user_info.html", users=users)
+  return jsonify({
+      "http_status": 200,
+      "Usuarios": users,
+  })
 
   #WORKS
 
@@ -67,38 +75,46 @@ def user_display_admin(current_user):
 
 
 #Form to add a new user to the database
-@app.route('/useradd', methods=["GET", "POST"])
+@app.route('/useradd', methods=["POST"])
 def user_form():
   if request.method == "POST":
-    user = User(request.form["username"], request.form["passwd"])
-    if request.form.getlist("admin"):
+    data = request.get_json()
+
+    user = User(user=data["username"], password=data["password"])
+    if request.get_json("admin"):
       user.admin = "YES"
     if db.exists(db_table, db_fields[0], user.user):
-      return redirect("userinfo")
+      return jsonify({
+          "http_status": 405,
+          "info": "User already exists"
+      })
     else:
       if db.insert(db_table, db_fields, user):
-        return redirect("userinfo")
+        return jsonify({
+          "http_status": 200 ,
+          "info": "User created" 
+        })
       else:
-        return jsonify({"Message" : "User not created"})
-  else:
-    return render_template("new_user.html")
+        return jsonify({
+            "http_status": 500,
+            "info": "User not created"
+        })
 #WORKS
 
 
-@app.route('/delete_users', methods=["GET", "POST"])
-def delusers():
-  if request.method == "POST":
-    users_to_delete = request.form.getlist("delete_users")
-    for user in users_to_delete:
-      db.delete(db_table, db_fields[0], user)
-    return redirect('/userinfo')
+@app.route('/delete_user/<username>', methods=["DELETE"])
+def delusers(username):
+  if db.exists(db_table, db_fields[0], username):
+    db.delete(db_table, db_fields[0], username)
+    return jsonify({
+        "http_status": 200,
+        "Deleted users": "User %s deleted" % username,
+    })
   else:
-    records = db.get_all("users")
-    users = []
-    for record in records:
-      users.append(dict(username=record[0], passwd=record[1], admin=record[-1]))
-    return render_template("delete_users.html", users=users)
-
+    return jsonify({
+        "http_status": 410,
+        "info" : "User doesn´t exist",
+    })
 
 #Get information of a certain user
 @app.route('/user/<username>', methods=["GET"])
@@ -106,9 +122,21 @@ def get_users(username):
   records = db.get_one( table="users", column="email", data=username)
   if records:
     user = User(records[0][0], records[0][1], records[0][2])
-    return user.user + "\t " + user.passwd + "\t" + user.admin
+    info = {
+        "username": user.user,
+        "admin": user.admin
+    }
+    return jsonify(
+        {
+            "http_status": 200 ,
+            "info": info,
+        }
+    )
   else:
-    return "User doesn´t exist"
+    return jsonify({
+        "http_status": 410,
+        "info": "User doesn´t exist" ,
+    })
 
 
 @app.route('/user/<username>', methods=["DELETE"])
@@ -119,15 +147,16 @@ def del_users(username):
   else:
     return jsonify({"Message": "User not deleted"})
 
-  return redirect("/user")
-
 
 @app.route("/login", methods=["POST"])
 def login():
   data = request.get_json()
   if not data:
-    return make_response("Please provide user and password", 400)
-  username = data['user']
+    return jsonify({
+        "http_status": 400,
+        "info": "Please provide user and password",
+    })
+  username = data['username']
   password_given = data['password']
   records = db.get_one(db_table, db_fields[0], username)
   if records: #If the user exists
@@ -139,10 +168,21 @@ def login():
       token = jwt.encode({token_fields[0] : user.user, 'exp' : datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, app.config['SECRET_KEY'])
       return jsonify({'token' : token.decode('UTF-8')})
     else:
-      return make_response("Incorrect password", 401)
+      return jsonify({
+          "http_status": 400,
+          "info": "Incorrect password",
+      })
   else:
-    return make_response("User not found", 401)
+    return jsonify({
+        "http_status": 410,
+        "info": "User not found",
+    })
 
+
+@app.route("/checktoken")
+@token_required
+def checktoken(current_user):
+  return json.dumps("True")
 
 if __name__ == '__main__':
   app.run(debug=True)

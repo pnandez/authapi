@@ -1,4 +1,3 @@
-from passlib.apps import custom_app_context as pwd_context
 from passlib.context import CryptContext
 from flask_jwt_extended import create_access_token
 import sqlite3 as sql
